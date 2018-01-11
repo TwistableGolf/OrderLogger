@@ -1,8 +1,7 @@
 from __future__ import print_function
 import httplib2
 import os
-
-import mime
+import io
 import base64
 from apiclient import errors, discovery
 
@@ -22,6 +21,9 @@ from oauth2client import tools
 from oauth2client.file import Storage
 
 from appJar import gui
+
+import json
+import datetime
 
 try:
     import argparse
@@ -65,8 +67,7 @@ def get_credentials():
         print('Storing credentials to ' + credential_path)
     return credentials
 
-def create_message_with_attachment(
-    sender, to, subject, message_text, file):
+def create_message_with_attachment(sender, to, subject, message_text, file):
   """Create a message for an email.
 
   Args:
@@ -127,31 +128,46 @@ def send_message(service, user_id, message):
   Returns:
     Sent Message.
   """
+  global app
+  print(type(message))
   try:
     message = (service.users().messages().send(userId=user_id, body=message)
                .execute())
     print ("Message Id: %s" % message['id'])
+    print(base64.urlsafe_b64decode(message['raw']))
+    app.infoBox("Email Notification","Email was sent succesfully")
     return message
+
   except errors.HttpError as error:
     print ("An error occurred: %s" % error)
+    app.errorBox("Email Notification","Error occured while sending message")
 
-def sendMessage(to,subject,body,attachment):
+def sendMessage(to,subject,attachment):
 
     credentials = get_credentials()
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('gmail', 'v1', http=http)
-    message = create_message_with_attachment("lewissavage88@gmail.com",to,subject,body,attachment)
+
+    with open('emailBody.txt', 'r') as myfile:
+      bodyText = myfile.read()
+
+    message = create_message_with_attachment("lewissavage88@gmail.com",to,subject,bodyText,attachment)
     send_message(service,"me",message)
 
 def attachFile(widjet):
+    global app
     file = app.openBox(title=None, dirName=None, fileTypes=None, asFile=True, parent=None)
     global filePath
     filePath = file.name
+    app.setButton("Attach File",filePath)
 
 
 def sendButton(widjet):
     print(filePath)
-    sendMessage(app.getEntry("To:"), app.getEntry("Subject:"), app.getEntry("Body:"),filePath)
+    global app
+    add = contacts[app.getOptionBox("Select company to order from")]
+    subject = "Enibas order %s" % datetime.datetime.now().strftime('%m/%d/%Y')
+    sendMessage(add, subject, filePath)
 
 def find_nth(haystack, needle, n):
     start = haystack.find(needle)
@@ -160,17 +176,98 @@ def find_nth(haystack, needle, n):
         n -= 1
     return start
 
+def loadContacts():
+  global contacts
+  with open("contacts.json",'r') as f:
+    try:
+      loadedContacts = json.load(f)
+      print(loadedContacts);
+      contacts = loadedContacts
+    except ValueError as e:
+      print("No contacts saved")
+  
+def saveContacts():
+  global contacts
+  with open("contacts.json", 'w') as f:
+    f.write(json.dumps(contacts))
+
+def addDeleteContact(w):
+  global app
+  global contacts
+  name = app.getEntry("Contact Name")
+  add = app.getEntry("Contact Address")
+  if (name == "") or (add == ""):
+    return
+  else:
+    if w == "Delete Contact":
+      try:
+        del contacts[name]
+      except KeyError as e:
+        print("Contact does not exist")
+      saveContacts()
+    else:
+      contacts[name] = add
+      saveContacts()
+    app.clearListBox("ContactList", callFunction=False)
+    app.addListItems("ContactList",contacts);
+    updateInterfaces()
+
+def changeContact(w):
+  global app
+  try:
+    nm = app.getListBox("ContactList")[0]
+    ad = contacts[str(app.getListBox("ContactList")[0])]
+    app.setEntry("Contact Name", nm)
+    app.setEntry("Contact Address", ad)
+  except IndexError as e:
+    print("No contacts to choose from")
+
+def updateInterfaces():
+  global app
+  global contacts
+  app.changeOptionBox("Select company to order from",contacts,callFunction=False)
+  app.changeOptionBox("Company",contacts,callFunction=False)
+
+contacts = {}
 filePath = ""
 
 if __name__ == '__main__':
-
+    loadContacts()
     app = gui()
+    app.setTitle("Workshop Ordering")
+    app.setFont(10,"Arial")
+    app.startTabbedFrame("TabbedFrame")
+    app.setResizable(canResize=False)
+    app.startTab("Order")
 
-    app.addLabel("title", "Welcome to appJar")
-    app.setLabelBg("title", "red")
-    app.addLabelEntry("To:")
-    app.addLabelEntry("Subject:")
-    app.addLabelEntry("Body:")
+    app.startLabelFrame("Ordering")
+
+    app.addLabelOptionBox("Select company to order from",contacts)
+    app.setOptionBoxWidth("Select company to order from",10);
     app.addButton("Attach File",attachFile)
+    app.setButtonSticky("Attach File","left")
+
     app.addButton("Send", sendButton)
+    app.setButtonSticky("Send","left")
+
+    app.stopLabelFrame()
+
+    app.stopTab()
+
+    app.startTab("Review")
+
+    app.addLabelOptionBox("Company",contacts)
+
+    app.stopTab()
+
+    app.startTab("Contacts")
+
+    app.addListBox("ContactList",contacts)
+    app.setListBoxFunction("ContactList",changeContact)
+    app.addLabelEntry("Contact Name")
+    app.addLabelEntry("Contact Address")
+    app.addButtons(["Delete Contact","Add Contact"],addDeleteContact)
+
+    app.stopTab()
+    app.stopTabbedFrame()
     app.go()
