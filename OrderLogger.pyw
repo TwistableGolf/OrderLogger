@@ -117,30 +117,26 @@ def create_message_with_attachment(sender, to, subject, message_text, file):
   return {'raw': base64.urlsafe_b64encode(message.as_string())}
 
 def send_message(service, user_id, message):
-  """Send an email message.
 
-  Args:
-    service: Authorized Gmail API service instance.
-    user_id: User's email address. The special value "me"
-    can be used to indicate the authenticated user.
-    message: Message to be sent.
+  	global app
+  	
+  	dir_path = os.getcwd()
+  	dir_path.
 
-  Returns:
-    Sent Message.
-  """
-  global app
-  print(type(message))
-  try:
-    message = (service.users().messages().send(userId=user_id, body=message)
-               .execute())
-    print ("Message Id: %s" % message['id'])
-    print(base64.urlsafe_b64decode(message['raw']))
-    app.infoBox("Email Notification","Email was sent succesfully")
-    return message
+  	try:
+    	message = (service.users().messages().send(userId=user_id, body=message).execute())
+    	print ("Message Id: %s" % message['id'])
+    	app.infoBox("Email Notification","Email was sent succesfully")
+    	return message
 
-  except errors.HttpError as error:
-    print ("An error occurred: %s" % error)
-    app.errorBox("Email Notification","Error occured while sending message")
+  	except errors.HttpError as error:
+    	print ("An error occurred: %s" % error)
+    	app.errorBox("Email Notification","Error occured while sending message")
+
+def createFolderIfNotExist(path):
+	directory = os.path.dirname(path)
+	if not os.path.exists(directory):
+		os.makedirs(directory)
 
 def sendMessage(to,subject,attachment):
 
