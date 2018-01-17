@@ -24,7 +24,7 @@ from appJar import gui
 
 import json
 import datetime
-
+from shutil import copyfile
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
@@ -39,14 +39,7 @@ APPLICATION_NAME = 'Gmail API Python Quickstart'
 
 
 def get_credentials():
-    """Gets valid user credentials from storage.
 
-    If nothing has been stored, or if the stored credentials are invalid,
-    the OAuth2 flow is completed to obtain the new credentials.
-
-    Returns:
-        Credentials, the obtained credential.
-    """
     home_dir = os.path.expanduser('~')
     credential_dir = os.path.join(home_dir, '.credentials')
     print(credential_dir)
@@ -68,18 +61,7 @@ def get_credentials():
     return credentials
 
 def create_message_with_attachment(sender, to, subject, message_text, file):
-  """Create a message for an email.
 
-  Args:
-    sender: Email address of the sender.
-    to: Email address of the receiver.
-    subject: The subject of the email message.
-    message_text: The text of the email message.
-    file: The path to the file to be attached.
-
-  Returns:
-    An object containing a base64url encoded email object.
-  """
   message = MIMEMultipart()
   message['to'] = to
   message['from'] = sender
@@ -89,49 +71,61 @@ def create_message_with_attachment(sender, to, subject, message_text, file):
   message.attach(msg)
 
   content_type, encoding = mimetypes.guess_type(file)
-
-  if content_type is None or encoding is not None:
-    content_type = 'application/octet-stream'
-  main_type, sub_type = content_type.split('/', 1)
-  if main_type == 'text':
-    fp = open(file, 'rb')
-    msg = MIMEText(fp.read(), _subtype=sub_type)
-    fp.close()
-  elif main_type == 'image':
-    fp = open(file, 'rb')
-    msg = MIMEImage(fp.read(), _subtype=sub_type)
-    fp.close()
-  elif main_type == 'audio':
-    fp = open(file, 'rb')
-    msg = MIMEAudio(fp.read(), _subtype=sub_type)
-    fp.close()
-  else:
-    fp = open(file, 'rb')
-    msg = MIMEBase(main_type, sub_type)
-    msg.set_payload(fp.read())
-    fp.close()
-  filename = os.path.basename(file)
-  msg.add_header('Content-Disposition', 'attachment', filename=filename)
-  message.attach(msg)
+  if file:
+    print(file)
+  
+  if file:
+    if content_type is None or encoding is not None:
+      content_type = 'application/octet-stream'
+    main_type, sub_type = content_type.split('/', 1)
+    if main_type == 'text':
+      fp = open(file, 'rb')
+      msg = MIMEText(fp.read(), _subtype=sub_type)
+      fp.close()
+    elif main_type == 'image':
+      fp = open(file, 'rb')
+      msg = MIMEImage(fp.read(), _subtype=sub_type)
+      fp.close()
+    elif main_type == 'audio':
+      fp = open(file, 'rb')
+      msg = MIMEAudio(fp.read(), _subtype=sub_type)
+      fp.close()
+    else:
+      fp = open(file, 'rb')
+      msg = MIMEBase(main_type, sub_type)
+      msg.set_payload(fp.read())
+      fp.close()
+    filename = os.path.basename(file)
+    msg.add_header('Content-Disposition', 'attachment', filename=filename)
+    message.attach(msg)
 
   return {'raw': base64.urlsafe_b64encode(message.as_string())}
 
 def send_message(service, user_id, message):
 
-  	global app
-  	
-  	dir_path = os.getcwd()
-  	dir_path.
+  global app
+  global filePath
+  if filePath:
+    dir_path = os.getcwd()
+    dir_path = os.path.join(dir_path,"Orders",app.getOptionBox("Select company to order from"))
+    extension = os.path.splitext(filePath)[1]
+    dir_path = os.path.join(dir_path,app.getOptionBox("Select company to order from")+" order %s" % datetime.datetime.now().strftime('%m-%d-%Y') + extension)
+    createFolderIfNotExist(dir_path)
+    f = open(dir_path,"w+")
+    f.close()
+    copyfile(filePath,dir_path)
 
-  	try:
-    	message = (service.users().messages().send(userId=user_id, body=message).execute())
-    	print ("Message Id: %s" % message['id'])
-    	app.infoBox("Email Notification","Email was sent succesfully")
-    	return message
+  if not app.getCheckBox("Testing"):
+      try:
+        message = (service.users().messages().send(userId=user_id, body=message).execute())
+        print ("Message Id: %s" % message['id'])
+        app.infoBox("Email Notification","Email was sent succesfully")
+        updateReview(False)
+        return message
 
-  	except errors.HttpError as error:
-    	print ("An error occurred: %s" % error)
-    	app.errorBox("Email Notification","Error occured while sending message")
+      except errors.HttpError as error:
+        print ("An error occurred: %s" % error)
+        app.errorBox("Email Notification","Error occured while sending message")
 
 def createFolderIfNotExist(path):
 	directory = os.path.dirname(path)
@@ -142,7 +136,7 @@ def sendMessage(to,subject,attachment):
 
     credentials = get_credentials()
     http = credentials.authorize(httplib2.Http())
-    service = discovery.build('gmail', 'v1', http=http)
+    service = discovery.build('gmail', 'v1', http=http,cache_discovery=False)
 
     with open('emailBody.txt', 'r') as myfile:
       bodyText = myfile.read()
@@ -174,7 +168,8 @@ def find_nth(haystack, needle, n):
 
 def loadContacts():
   global contacts
-  with open("contacts.json",'r') as f:
+  createFolderIfNotExist(os.path.join(os.getcwd(),"Contacts","contacts.json"))
+  with open(os.path.join(os.getcwd(),"Contacts","contacts.json"),'a+') as f:
     try:
       loadedContacts = json.load(f)
       print(loadedContacts);
@@ -184,7 +179,9 @@ def loadContacts():
   
 def saveContacts():
   global contacts
-  with open("contacts.json", 'w') as f:
+  createFolderIfNotExist(os.path.join(os.getcwd(),"Contacts","contacts.json"))
+
+  with open(os.path.join(os.getcwd(),"Contacts","contacts.json"), 'w+') as f:
     f.write(json.dumps(contacts))
 
 def addDeleteContact(w):
@@ -224,6 +221,9 @@ def updateInterfaces():
   app.changeOptionBox("Select company to order from",contacts,callFunction=False)
   app.changeOptionBox("Company",contacts,callFunction=False)
 
+def updateReview(w):
+  print("updateReview")
+
 contacts = {}
 filePath = ""
 
@@ -238,6 +238,7 @@ if __name__ == '__main__':
 
     app.startLabelFrame("Ordering")
 
+    app.addCheckBox("Testing")
     app.addLabelOptionBox("Select company to order from",contacts)
     app.setOptionBoxWidth("Select company to order from",10);
     app.addButton("Attach File",attachFile)
@@ -253,7 +254,7 @@ if __name__ == '__main__':
     app.startTab("Review")
 
     app.addLabelOptionBox("Company",contacts)
-
+    app.setOptionBoxChangeFunction("Company",updateReview)
     app.stopTab()
 
     app.startTab("Contacts")
