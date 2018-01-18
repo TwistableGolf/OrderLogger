@@ -31,6 +31,10 @@ try:
 except ImportError:
     flags = None
 
+
+import appscript
+import subprocess
+
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/gmail-python-quickstart.json
 SCOPES = 'https://www.googleapis.com/auth/gmail.send'
@@ -67,7 +71,7 @@ def create_message_with_attachment(sender, to, subject, message_text, file):
   message['from'] = sender
   message['subject'] = subject
 
-  msg = MIMEText(message_text)
+  msg = MIMEText(message_text,'html')
   message.attach(msg)
 
   content_type, encoding = mimetypes.guess_type(file)
@@ -144,20 +148,30 @@ def sendMessage(to,subject,attachment):
     message = create_message_with_attachment("lewissavage88@gmail.com",to,subject,bodyText,attachment)
     send_message(service,"me",message)
 
-def attachFile(widjet):
+def createOrder(widjet):
     global app
-    file = app.openBox(title=None, dirName=None, fileTypes=None, asFile=True, parent=None)
-    global filePath
-    filePath = file.name
-    app.setButton("Attach File",filePath)
+    #file = app.openBox(title=None, dirName=None, fileTypes=None, asFile=True, parent=None)
+    #global filePath
+    #filePath = file.name
+    company = app.getOptionBox("Select company to order from")
+    subprocess.check_call(['open', '-a', 'Microsoft Excel'])
+    excel = appscript.app('Microsoft Excel')
+    createFolderIfNotExist(os.path.join(os.getcwd(),"Contacts","MasterSheets"))
+    path = os.path.join(os.getcwd(),"Contacts","MasterSheets","%s_Master.xlsx" % company)
+    tempPath = os.path.join(os.getcwd(),"Contacts","MasterSheets","Temp","%s_Master_Temp.xlsx" % company)
+    copyfile(path,tempPath)
+    app.setButton("Create Order", "Ensure file is Saved")
+    excel.open(tempPath)
+    filePath = tempPath
 
 
 def sendButton(widjet):
+    global filePath
     print(filePath)
     global app
-    add = contacts[app.getOptionBox("Select company to order from")]
+    address = contacts[app.getOptionBox("Select company to order from")]
     subject = "Enibas order %s" % datetime.datetime.now().strftime('%m/%d/%Y')
-    sendMessage(add, subject, filePath)
+    sendMessage(address, subject, filePath)
 
 def find_nth(haystack, needle, n):
     start = haystack.find(needle)
@@ -171,10 +185,12 @@ def loadContacts():
   createFolderIfNotExist(os.path.join(os.getcwd(),"Contacts","contacts.json"))
   with open(os.path.join(os.getcwd(),"Contacts","contacts.json"),'a+') as f:
     try:
+      f.seek(0)
       loadedContacts = json.load(f)
       print(loadedContacts);
       contacts = loadedContacts
     except ValueError as e:
+      print(e)
       print("No contacts saved")
   
 def saveContacts():
@@ -224,6 +240,7 @@ def updateInterfaces():
 def updateReview(w):
   print("updateReview")
 
+
 contacts = {}
 filePath = ""
 
@@ -241,8 +258,8 @@ if __name__ == '__main__':
     app.addCheckBox("Testing")
     app.addLabelOptionBox("Select company to order from",contacts)
     app.setOptionBoxWidth("Select company to order from",10);
-    app.addButton("Attach File",attachFile)
-    app.setButtonSticky("Attach File","left")
+    app.addButton("Create Order",createOrder)
+    app.setButtonSticky("Create Order","left")
 
     app.addButton("Send", sendButton)
     app.setButtonSticky("Send","left")
